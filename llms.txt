@@ -1,0 +1,45 @@
+# Linear CLI
+
+> A read-only command-line tool for fetching Linear ticket data as JSON. Designed for automation workflows, CI/CD pipelines, and scripting. Outputs structured JSON to stdout for easy processing with tools like jq.
+
+Linear CLI provides three main operations:
+- List all accessible teams in a workspace
+- List recent issues in a specific team
+- Fetch complete issue details including comments, relations, parent/child hierarchy, and history
+
+The CLI uses secure credential storage in `~/.config/linear-cli/credentials` and supports environment variables for CI/CD. It is strictly read-only and cannot modify any Linear data.
+
+## Usage
+
+```
+linear              # List all teams
+linear TEAM          # List issues in team TEAM
+linear TEAM-123      # Fetch full details for issue TEAM-123
+linear --key KEY    # Store API key
+```
+
+## Documentation
+
+- [README](https://github.com/medeirosjoaquim/linear-cli/blob/main/README.md): Complete documentation with examples, output formats, and use cases
+
+## Source Code
+
+- [src/index.ts](https://github.com/medeirosjoaquim/linear-cli/blob/main/src/index.ts): CLI entry point with argument parsing
+- [src/linear-client.ts](https://github.com/medeirosjoaquim/linear-cli/blob/main/src/linear-client.ts): Linear SDK wrapper with fetch functions
+- [src/types.ts](https://github.com/medeirosjoaquim/linear-cli/blob/main/src/types.ts): Zod schemas for type validation
+- [src/config.ts](https://github.com/medeirosjoaquim/linear-cli/blob/main/src/config.ts): API key management and credential storage
+- [src/errors.ts](https://github.com/medeirosjoaquim/linear-cli/blob/main/src/errors.ts): Error types and exit codes
+
+## Key Information
+
+- **Language**: TypeScript (ES modules)
+- **Runtime**: Node.js 22+
+- **Package Manager**: pnpm
+- **Main Dependency**: @linear/sdk for GraphQL API access
+- **Output**: JSON to stdout, errors to stderr
+- **Exit Codes**: 0 (success), 1 (config error), 2 (auth error), 3 (not found)
+
+## Optional
+
+- [package.json](https://github.com/medeirosjoaquim/linear-cli/blob/main/package.json): Dependencies and scripts
+- [tsconfig.json](https://github.com/medeirosjoaquim/linear-cli/blob/main/tsconfig.json): TypeScript configuration

@@ -1,0 +1,38 @@
+{
+  "name": "linear-cli",
+  "version": "0.1.0",
+  "description": "CLI for fetching Linear ticket data as JSON",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "linear": "./bin/linear"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --outDir bin && mv bin/index.js bin/linear && chmod +x bin/linear",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "linear",
+    "cli",
+    "graphql",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.11.0",
+  "dependencies": {
+    "@linear/sdk": "^70.0.0",
+    "commander": "^14.0.2",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}
