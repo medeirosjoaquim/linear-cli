@@ -1,7 +1,7 @@
 import { LinearClient, LinearError, LinearDocument } from '@linear/sdk';
 import type { Comment, IssueRelation, IssueHistory } from '@linear/sdk';
 import { CLIError, AuthError, NotFoundError, EXIT_CODES } from './errors.js';
-import type { CommentOutput, RelationOutput, IssueRef, HistoryEntry, CompleteIssueOutput, TeamOutput, IssueListItem } from './types.js';
+import type { CommentOutput, RelationOutput, IssueRef, HistoryEntry, CompleteIssueOutput, TeamOutput, IssueListItem, TeamMemberOutput } from './types.js';
 
 /**
  * Regex for parsing issue identifiers (e.g., "TEAM-123", "DEV456")
@@ -269,20 +269,111 @@ export async function listTeams(client: LinearClient): Promise<TeamOutput[]> {
 }
 
 /**
+ * List all members of a team
+ *
+ * @param client - Linear API client
+ * @param teamKey - Team key (e.g., "TEAM")
+ * @returns Array of TeamMemberOutput objects
+ * @throws NotFoundError if team is not found
+ * @throws AuthError if authentication fails (401)
+ * @throws CLIError for other API errors
+ */
+export async function listTeamMembers(
+  client: LinearClient,
+  teamKey: string
+): Promise<TeamMemberOutput[]> {
+  try {
+    // First find the team by key (case-insensitive)
+    const teams = await client.teams();
+    const team = teams.nodes.find(
+      (t) => t.key.toUpperCase() === teamKey.toUpperCase()
+    );
+
+    if (!team) {
+      throw new NotFoundError(`Team not found: ${teamKey}`);
+    }
+
+    // Fetch team members
+    const membersConnection = await team.members();
+
+    return membersConnection.nodes.map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl ?? null,
+      isActive: user.active,
+    }));
+  } catch (error) {
+    // Re-throw NotFoundError as-is
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+
+    // Handle Linear SDK errors
+    if (error instanceof LinearError) {
+      if (error.status === 401) {
+        throw new AuthError('Invalid API key');
+      }
+      throw new CLIError(`Linear API error: ${error.message}`, EXIT_CODES.API_ERROR);
+    }
+
+    // Unexpected error
+    throw new CLIError(
+      `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
+      EXIT_CODES.UNEXPECTED
+    );
+  }
+}
+
+/**
+ * Date filters for issue queries
+ */
+export interface DateFilters {
+  createdAfter?: string;
+  createdBefore?: string;
+  updatedAfter?: string;
+  updatedBefore?: string;
+  completedAfter?: string;
+  completedBefore?: string;
+}
+
+/**
+ * Parse and validate a date string
+ * @param dateStr - Date string in ISO 8601 or YYYY-MM-DD format
+ * @returns ISO 8601 date string
+ * @throws CLIError if date is invalid
+ */
+function parseDate(dateStr: string, fieldName: string): string {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) {
+    throw new CLIError(
+      `Invalid date for ${fieldName}: ${dateStr}. Use ISO 8601 or YYYY-MM-DD format.`,
+      EXIT_CODES.CONFIG_ERROR
+    );
+  }
+  return date.toISOString();
+}
+
+/**
  * List recent issues for a team
  *
  * @param client - Linear API client
  * @param teamKey - Team key (e.g., "TEAM")
  * @param limit - Maximum number of issues to return (default 20)
+ * @param assigneeFilter - Optional assignee filter (username/email/displayName or "unassigned")
+ * @param dateFilters - Optional date range filters
  * @returns Array of IssueListItem objects
- * @throws NotFoundError if team is not found
+ * @throws NotFoundError if team is not found or assignee not found
  * @throws AuthError if authentication fails (401)
  * @throws CLIError for other API errors
  */
 export async function listTeamIssues(
   client: LinearClient,
   teamKey: string,
-  limit: number = 20
+  limit: number = 20,
+  assigneeFilter?: string,
+  dateFilters?: DateFilters
 ): Promise<IssueListItem[]> {
   try {
     // First find the team by key (case-insensitive)
@@ -295,9 +386,63 @@ export async function listTeamIssues(
       throw new NotFoundError(`Team not found: ${teamKey}`);
     }
 
+    // Build filter object
+    const filter: any = { team: { id: { eq: team.id } } };
+
+    // Add assignee filter if provided
+    if (assigneeFilter) {
+      if (assigneeFilter.toLowerCase() === 'unassigned') {
+        // Filter for issues with no assignee
+        filter.assignee = { null: true };
+      } else {
+        // Find user by name, email, or displayName
+        const users = await client.users();
+        const user = users.nodes.find(
+          (u) =>
+            u.name.toLowerCase().includes(assigneeFilter.toLowerCase()) ||
+            u.email.toLowerCase().includes(assigneeFilter.toLowerCase()) ||
+            u.displayName.toLowerCase().includes(assigneeFilter.toLowerCase())
+        );
+
+        if (!user) {
+          throw new NotFoundError(`User not found: ${assigneeFilter}`);
+        }
+
+        filter.assignee = { id: { eq: user.id } };
+      }
+    }
+
+    // Add date filters if provided
+    if (dateFilters) {
+      if (dateFilters.createdAfter) {
+        filter.createdAt = filter.createdAt || {};
+        filter.createdAt.gte = parseDate(dateFilters.createdAfter, 'created-after');
+      }
+      if (dateFilters.createdBefore) {
+        filter.createdAt = filter.createdAt || {};
+        filter.createdAt.lte = parseDate(dateFilters.createdBefore, 'created-before');
+      }
+      if (dateFilters.updatedAfter) {
+        filter.updatedAt = filter.updatedAt || {};
+        filter.updatedAt.gte = parseDate(dateFilters.updatedAfter, 'updated-after');
+      }
+      if (dateFilters.updatedBefore) {
+        filter.updatedAt = filter.updatedAt || {};
+        filter.updatedAt.lte = parseDate(dateFilters.updatedBefore, 'updated-before');
+      }
+      if (dateFilters.completedAfter) {
+        filter.completedAt = filter.completedAt || {};
+        filter.completedAt.gte = parseDate(dateFilters.completedAfter, 'completed-after');
+      }
+      if (dateFilters.completedBefore) {
+        filter.completedAt = filter.completedAt || {};
+        filter.completedAt.lte = parseDate(dateFilters.completedBefore, 'completed-before');
+      }
+    }
+
     // Fetch issues for this team, ordered by updated
     const issues = await client.issues({
-      filter: { team: { id: { eq: team.id } } },
+      filter,
       first: limit,
       orderBy: LinearDocument.PaginationOrderBy.UpdatedAt,
     });

@@ -144,3 +144,21 @@ export const IssueListItemSchema = z.object({
  * Type representing an issue list item in output format
  */
 export type IssueListItem = z.infer<typeof IssueListItemSchema>;
+
+/**
+ * Schema for team member output data
+ * Represents a user who is a member of a team
+ */
+export const TeamMemberOutputSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  displayName: z.string(),
+  avatarUrl: z.string().nullable(),
+  isActive: z.boolean(),
+});
+
+/**
+ * Type representing a team member in output format
+ */
+export type TeamMemberOutput = z.infer<typeof TeamMemberOutputSchema>;

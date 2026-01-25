@@ -5,7 +5,10 @@ A command-line tool for fetching Linear ticket data as JSON. Built for automatio
 ## Features
 
 - **List teams** — See all accessible teams in your workspace
+- **List team members** — See all members of a specific team
 - **List issues** — Browse recent tickets in any team
+- **Filter by assignee** — Filter issues by assignee or show unassigned issues
+- **Filter by date** — Filter issues by created, updated, or completed date ranges
 - **Fetch full details** — Get complete issue data including comments, relations, history
 - **JSON output** — Pipe to `jq`, save to files, or process programmatically
 - **Secure credentials** — API key stored safely in `~/.config/linear-cli/credentials`
@@ -39,8 +42,21 @@ Requires Node.js 22+.
 # List all teams
 ./bin/linear
 
+# List team members
+./bin/linear members TEAM
+
 # List recent issues in a team
 ./bin/linear TEAM
+
+# Filter issues by assignee
+./bin/linear TEAM @username
+
+# List unassigned issues
+./bin/linear TEAM @unassigned
+
+# Filter by date ranges
+./bin/linear TEAM --created-after=2024-01-01
+./bin/linear TEAM --updated-after=2024-12-01 --updated-before=2024-12-31
 
 # Fetch full issue details
 ./bin/linear TEAM-123
@@ -49,15 +65,21 @@ Requires Node.js 22+.
 ## Usage
 
 ```
-Usage: linear [options] [target]
+Usage: linear [options] [args...]
 
 Arguments:
-  target              Team key (TEAM) or issue identifier (TEAM-123)
+  args                       Command arguments: [TEAM|TEAM-123|members TEAM] [@assignee]
 
 Options:
-  -V, --version       output the version number
-  -k, --key <apiKey>  Set and store API key
-  -h, --help          display help for command
+  -V, --version              output the version number
+  -k, --key <apiKey>         Set and store API key
+  --created-after <date>     Filter issues created after date (ISO 8601 or YYYY-MM-DD)
+  --created-before <date>    Filter issues created before date (ISO 8601 or YYYY-MM-DD)
+  --updated-after <date>     Filter issues updated after date (ISO 8601 or YYYY-MM-DD)
+  --updated-before <date>    Filter issues updated before date (ISO 8601 or YYYY-MM-DD)
+  --completed-after <date>   Filter issues completed after date (ISO 8601 or YYYY-MM-DD)
+  --completed-before <date>  Filter issues completed before date (ISO 8601 or YYYY-MM-DD)
+  -h, --help                 display help for command
 ```
 
 ### Examples
@@ -67,9 +89,33 @@ Options:
 linear
 # Output: [{"id": "...", "key": "TEAM", "name": "Core Team"}, ...]
 
+# List team members
+linear members TEAM
+# Output: [{"id": "...", "name": "John Doe", "email": "john@example.com", ...}, ...]
+
 # List recent issues in a team (20 most recently updated)
 linear TEAM
 # Output: [{"id": "...", "identifier": "TEAM-123", "title": "...", ...}, ...]
+
+# Filter issues by assignee (matches name, email, or displayName)
+linear TEAM @john
+# Output: Issues assigned to users matching "john"
+
+# List unassigned issues
+linear TEAM @unassigned
+# Output: Issues with no assignee
+
+# Filter by created date
+linear TEAM --created-after=2024-01-01
+# Output: Issues created after Jan 1, 2024
+
+# Filter by date range
+linear TEAM --updated-after=2024-12-01 --updated-before=2024-12-31
+# Output: Issues updated in December 2024
+
+# Combine filters
+linear TEAM @john --completed-after=2024-01-01
+# Output: John's completed issues since Jan 1, 2024
 
 # Fetch complete issue details
 linear TEAM-123
@@ -92,6 +138,21 @@ linear TEAM-123 > issue.json
     "id": "team-uuid",
     "key": "TEAM",
     "name": "Core Team"
+  }
+]
+```
+
+### Team Members
+
+```json
+[
+  {
+    "id": "user-uuid",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "displayName": "John Doe",
+    "avatarUrl": "https://...",
+    "isActive": true
   }
 ]
 ```
@@ -213,6 +274,44 @@ if [ "$STATUS" != "Production Deployed" ]; then
   echo "Issue TEAM-123 not yet deployed"
   exit 1
 fi
+```
+
+### Filter by Assignee
+
+```bash
+# Get all issues assigned to a specific user
+linear TEAM @john
+
+# Get all unassigned issues
+linear TEAM @unassigned
+
+# Count unassigned issues
+linear TEAM @unassigned | jq 'length'
+
+# Get email addresses of all team members
+linear members TEAM | jq -r '.[].email'
+```
+
+### Filter by Date
+
+```bash
+# Get issues created in the last month
+linear TEAM --created-after=2024-12-01
+
+# Get issues updated this year
+linear TEAM --updated-after=2024-01-01
+
+# Get issues completed in a specific date range
+linear TEAM --completed-after=2024-11-01 --completed-before=2024-11-30
+
+# Combine date and assignee filters
+linear TEAM @john --created-after=2024-01-01
+
+# Get recently updated unassigned issues
+linear TEAM @unassigned --updated-after=2024-12-01
+
+# Count issues completed this month
+linear TEAM --completed-after=2024-12-01 | jq 'length'
 ```
 
 ### Filter by Status
