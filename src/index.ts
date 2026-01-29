@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import { loadEnv, saveApiKey, apiKeySchema } from './config.js';
 import { handleError, NotFoundError, EXIT_CODES } from './errors.js';
-import { createLinearClient, fetchIssueByIdentifier, listTeams, listTeamIssues, listTeamMembers } from './linear-client.js';
+import { createLinearClient, fetchIssueByIdentifier, listTeams, listTeamIssues, listTeamMembers, updateIssueStatus } from './linear-client.js';
 
 const program = new Command();
 
@@ -15,10 +15,11 @@ program.configureOutput({
 
 program
   .name('linear')
-  .description('CLI for fetching Linear ticket data as JSON')
+  .description('CLI for fetching and updating Linear ticket data as JSON')
   .version('0.1.0')
   .argument('[args...]', 'Command arguments (see examples below)')
   .option('-k, --key <apiKey>', 'Set and store API key')
+  .option('-s, --status <status>', 'Update issue status (use with issue identifier)')
   .option('--created-after <date>', 'Filter issues created after date (ISO 8601 or YYYY-MM-DD)')
   .option('--created-before <date>', 'Filter issues created before date (ISO 8601 or YYYY-MM-DD)')
   .option('--updated-after <date>', 'Filter issues updated after date (ISO 8601 or YYYY-MM-DD)')
@@ -33,6 +34,8 @@ Commands:
   linear TEAM @username         Filter issues by assignee (matches name/email/displayName)
   linear TEAM @unassigned       List unassigned issues in a team
   linear TEAM-123               Fetch complete details for a specific issue
+  linear TEAM-123 --status STATUS
+                                Update issue status (e.g., "In Progress", "Done")
 
 Examples:
   $ linear --key lin_api_xxx    Store your Linear API key
@@ -42,6 +45,10 @@ Examples:
   $ linear ENG @john            Show ENG issues assigned to users matching "john"
   $ linear ENG @unassigned      Show unassigned ENG issues
   $ linear ENG-123              Show complete details for issue ENG-123
+  $ linear ENG-123 --status "In Progress"
+                                Update issue status to "In Progress"
+  $ linear ENG-123 --status "Done"
+                                Update issue status to "Done"
   $ linear ENG-123 | jq         Pretty-print issue details with jq
   $ linear ENG | jq 'length'    Count recent issues in ENG team
   $ linear ENG --created-after=2024-01-01
@@ -61,6 +68,7 @@ Authentication:
 `)
   .action(async (args: string[] | undefined, options: {
     key?: string;
+    status?: string;
     createdAfter?: string;
     createdBefore?: string;
     updatedAfter?: string;
@@ -105,8 +113,17 @@ Authentication:
         process.exit(EXIT_CODES.SUCCESS);
       }
 
-      // Has dash: fetch specific ticket (TEAM-123)
+      // Has dash: fetch specific ticket (TEAM-123) or update status
       if (firstArg.includes('-')) {
+        // Check if --status option is provided
+        if (options.status) {
+          // Update issue status
+          const updatedIssue = await updateIssueStatus(client, firstArg.toUpperCase(), options.status);
+          console.log(JSON.stringify(updatedIssue, null, 2));
+          process.exit(EXIT_CODES.SUCCESS);
+        }
+
+        // Fetch issue details
         const issue = await fetchIssueByIdentifier(client, firstArg.toUpperCase());
 
         if (!issue) {
