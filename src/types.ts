@@ -9,6 +9,31 @@ export const IdentifierSchema = z
   .regex(/^[A-Za-z]+-?\d+$/, 'Invalid identifier format. Expected: TEAM-123');
 
 /**
+ * Enum for all possible Linear issue statuses
+ * These statuses represent the workflow states for issues
+ */
+export enum IssueStatus {
+  Todo = 'Todo',
+  InProgress = 'In Progress',
+  QATesting = 'QA Testing',
+  StagingPreProDeployed = 'Staging/ Pre-Pro Deployed',
+  ReadyForProduction = 'Ready For Production',
+  Duplicate = 'Duplicate',
+}
+
+/**
+ * Zod schema for validating issue status values
+ */
+export const IssueStatusSchema = z.enum([
+  'Todo',
+  'In Progress',
+  'QA Testing',
+  'Staging/ Pre-Pro Deployed',
+  'Ready For Production',
+  'Duplicate',
+]);
+
+/**
  * Schema for issue output data
  * Represents the standardized output format for Linear issues
  */
