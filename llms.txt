@@ -1,16 +1,17 @@
 # Linear CLI
 
-> A read-only command-line tool for fetching Linear ticket data as JSON. Designed for automation workflows, CI/CD pipelines, and scripting. Outputs structured JSON to stdout for easy processing with tools like jq.
+> A command-line tool for fetching and updating Linear ticket data as JSON. Designed for automation workflows, CI/CD pipelines, and scripting. Outputs structured JSON to stdout for easy processing with tools like jq.
 
-Linear CLI provides powerful querying and filtering capabilities:
+Linear CLI provides powerful querying, filtering, and update capabilities:
 - List all accessible teams in a workspace
 - List team members with contact information
 - List recent issues in a specific team
 - Filter issues by assignee (specific user or unassigned)
 - Filter issues by date ranges (created, updated, or completed)
 - Fetch complete issue details including comments, relations, parent/child hierarchy, and history
+- Update issue status (e.g., change from "Todo" to "In Progress")
 
-The CLI uses secure credential storage in `~/.config/linear-cli/credentials` and supports environment variables for CI/CD. It is strictly read-only and cannot modify any Linear data.
+The CLI uses secure credential storage in `~/.config/linear-cli/credentials` and supports environment variables for CI/CD.
 
 ## Usage
 
@@ -22,6 +23,7 @@ linear TEAM @username           # Filter by assignee
 linear TEAM @unassigned         # List unassigned issues
 linear TEAM --created-after=YYYY-MM-DD    # Filter by date
 linear TEAM-123                 # Fetch full details for issue TEAM-123
+linear TEAM-123 --status "In Progress"    # Update issue status
 linear --key KEY                # Store API key
 ```
 
@@ -47,6 +49,7 @@ linear --key KEY                # Store API key
 - **Exit Codes**: 0 (success), 1 (config error), 2 (auth error), 3 (not found)
 - **Filtering**: Supports assignee filtering (@username, @unassigned) and date range filtering (--created-after/before, --updated-after/before, --completed-after/before)
 - **Date Formats**: ISO 8601 or YYYY-MM-DD
+- **Updates**: Supports updating issue status with `--status` option (status names are case-insensitive)
 
 ## Optional
 
