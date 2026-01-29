@@ -486,3 +486,98 @@ export async function listTeamIssues(
     );
   }
 }
+
+/**
+ * Update the status of a Linear issue
+ *
+ * @param client - Linear API client
+ * @param identifier - Issue identifier (e.g., "TEAM-123")
+ * @param statusName - New status name (e.g., "In Progress")
+ * @returns Updated issue data
+ * @throws NotFoundError if issue or status is not found
+ * @throws AuthError if authentication fails (401)
+ * @throws CLIError for other API errors
+ */
+export async function updateIssueStatus(
+  client: LinearClient,
+  identifier: string,
+  statusName: string
+): Promise<CompleteIssueOutput> {
+  const { number } = parseIdentifier(identifier);
+
+  try {
+    // First, find the issue
+    const issues = await client.issues({
+      filter: { number: { eq: number } },
+      first: 10,
+    });
+
+    let targetIssue = null;
+    for (const issue of issues.nodes) {
+      if (issue.identifier.toUpperCase() === identifier.toUpperCase()) {
+        targetIssue = issue;
+        break;
+      }
+    }
+
+    if (!targetIssue) {
+      throw new NotFoundError(`Issue not found: ${identifier}`);
+    }
+
+    // Get the team to find available workflow states
+    const team = await targetIssue.team;
+    if (!team) {
+      throw new CLIError(`Cannot determine team for issue: ${identifier}`, EXIT_CODES.UNEXPECTED);
+    }
+
+    const states = await team.states();
+    const targetState = states.nodes.find(
+      (state) => state.name.toLowerCase() === statusName.toLowerCase()
+    );
+
+    if (!targetState) {
+      const availableStates = states.nodes.map((s) => s.name).join(', ');
+      throw new NotFoundError(
+        `Status not found: "${statusName}". Available statuses: ${availableStates}`
+      );
+    }
+
+    // Update the issue status
+    const updatePayload = await client.updateIssue(targetIssue.id, {
+      stateId: targetState.id,
+    });
+
+    const updateResult = await updatePayload.issue;
+    if (!updateResult) {
+      throw new CLIError('Failed to update issue status', EXIT_CODES.UNEXPECTED);
+    }
+
+    // Fetch complete updated issue data
+    const updatedIssue = await fetchIssueByIdentifier(client, identifier);
+    if (!updatedIssue) {
+      throw new CLIError('Failed to fetch updated issue', EXIT_CODES.UNEXPECTED);
+    }
+
+    return updatedIssue;
+  } catch (error) {
+    // Re-throw known error types
+    if (error instanceof NotFoundError || error instanceof CLIError) {
+      throw error;
+    }
+
+    // Handle Linear SDK errors
+    if (error instanceof LinearError) {
+      if (error.status === 401) {
+        throw new AuthError('Invalid API key');
+      }
+      throw new CLIError(`Linear API error: ${error.message}`, EXIT_CODES.API_ERROR);
+    }
+
+    // Unexpected error
+    throw new CLIError(
+      `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
+      EXIT_CODES.UNEXPECTED
+    );
+  }
+}
+
