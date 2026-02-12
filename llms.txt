@@ -5,6 +5,7 @@
 Linear CLI provides powerful querying, filtering, and update capabilities:
 - List all accessible teams in a workspace
 - List team members with contact information
+- Search issues by keywords across all teams or within a specific team
 - List recent issues in a specific team
 - Filter issues by assignee (specific user or unassigned)
 - Filter issues by date ranges (created, updated, or completed)
@@ -18,6 +19,8 @@ The CLI uses secure credential storage in `~/.config/linear-cli/credentials` and
 ```
 linear                          # List all teams
 linear members TEAM             # List team members
+linear search <keywords>        # Search issues by keywords across all teams
+linear search <keywords> TEAM   # Search issues within a specific team
 linear TEAM                     # List issues in team TEAM
 linear TEAM @username           # Filter by assignee
 linear TEAM @unassigned         # List unassigned issues
@@ -47,6 +50,7 @@ linear --key KEY                # Store API key
 - **Main Dependency**: @linear/sdk for GraphQL API access
 - **Output**: JSON to stdout, errors to stderr
 - **Exit Codes**: 0 (success), 1 (config error), 2 (auth error), 3 (not found)
+- **Search**: Natural language search across all teams or scoped to a specific team
 - **Filtering**: Supports assignee filtering (@username, @unassigned) and date range filtering (--created-after/before, --updated-after/before, --completed-after/before)
 - **Date Formats**: ISO 8601 or YYYY-MM-DD
 - **Updates**: Supports updating issue status with `--status` option (status names are case-insensitive)

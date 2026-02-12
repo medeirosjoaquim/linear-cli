@@ -6,6 +6,7 @@ A command-line tool for fetching Linear ticket data as JSON. Built for automatio
 
 - **List teams** — See all accessible teams in your workspace
 - **List team members** — See all members of a specific team
+- **Search issues** — Find tickets by keywords across all teams or within a specific team
 - **List issues** — Browse recent tickets in any team
 - **Filter by assignee** — Filter issues by assignee or show unassigned issues
 - **Filter by date** — Filter issues by created, updated, or completed date ranges
@@ -45,6 +46,12 @@ Requires Node.js 22+.
 # List team members
 ./bin/linear members TEAM
 
+# Search issues by keywords across all teams
+./bin/linear search "auth bug"
+
+# Search issues within a specific team
+./bin/linear search "api error" TEAM
+
 # List recent issues in a team
 ./bin/linear TEAM
 
@@ -68,7 +75,7 @@ Requires Node.js 22+.
 Usage: linear [options] [args...]
 
 Arguments:
-  args                       Command arguments: [TEAM|TEAM-123|members TEAM] [@assignee]
+  args                       Command arguments: [TEAM|TEAM-123|members TEAM|search <keywords>] [@assignee]
 
 Options:
   -V, --version              output the version number
@@ -92,6 +99,14 @@ linear
 # List team members
 linear members TEAM
 # Output: [{"id": "...", "name": "John Doe", "email": "john@example.com", ...}, ...]
+
+# Search issues by keywords across all teams
+linear search "auth bug"
+# Output: [{"id": "...", "identifier": "TEAM-123", "title": "Fix auth bug", ...}, ...]
+
+# Search issues within a specific team
+linear search "api error" ENG
+# Output: [{"id": "...", "identifier": "ENG-456", "title": "API error handling", ...}, ...]
 
 # List recent issues in a team (20 most recently updated)
 linear TEAM
@@ -290,6 +305,22 @@ linear TEAM @unassigned | jq 'length'
 
 # Get email addresses of all team members
 linear members TEAM | jq -r '.[].email'
+```
+
+### Search Issues
+
+```bash
+# Search for issues matching keywords across all teams
+linear search "auth bug"
+
+# Search within a specific team
+linear search "api error" ENG
+
+# Search and filter results with jq
+linear search "performance" | jq '[.[] | select(.status == "In Progress")]'
+
+# Count search results
+linear search "critical" | jq 'length'
 ```
 
 ### Filter by Date

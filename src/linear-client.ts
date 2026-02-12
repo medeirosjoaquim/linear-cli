@@ -1,7 +1,7 @@
 import { LinearClient, LinearError, LinearDocument } from '@linear/sdk';
-import type { Comment, IssueRelation, IssueHistory } from '@linear/sdk';
+import type { Comment, IssueRelation, IssueHistory, IssueSearchResult } from '@linear/sdk';
 import { CLIError, AuthError, NotFoundError, EXIT_CODES } from './errors.js';
-import type { CommentOutput, RelationOutput, IssueRef, HistoryEntry, CompleteIssueOutput, TeamOutput, IssueListItem, TeamMemberOutput } from './types.js';
+import type { CommentOutput, RelationOutput, IssueRef, HistoryEntry, CompleteIssueOutput, TeamOutput, IssueListItem, TeamMemberOutput, IssueSearchOutput } from './types.js';
 
 /**
  * Regex for parsing issue identifiers (e.g., "TEAM-123", "DEV456")
@@ -465,6 +465,92 @@ export async function listTeamIssues(
         };
       })
     );
+  } catch (error) {
+    // Re-throw NotFoundError as-is
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+
+    // Handle Linear SDK errors
+    if (error instanceof LinearError) {
+      if (error.status === 401) {
+        throw new AuthError('Invalid API key');
+      }
+      throw new CLIError(`Linear API error: ${error.message}`, EXIT_CODES.API_ERROR);
+    }
+
+    // Unexpected error
+    throw new CLIError(
+      `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
+      EXIT_CODES.UNEXPECTED
+    );
+  }
+}
+
+/**
+ * Search issues using natural language query
+ *
+ * @param client - Linear API client
+ * @param term - Search term/keywords
+ * @param teamKey - Optional team key to restrict search to
+ * @param limit - Maximum number of results (default 20)
+ * @returns Array of IssueSearchOutput objects
+ * @throws NotFoundError if team is not found
+ * @throws AuthError if authentication fails (401)
+ * @throws CLIError for other API errors
+ */
+export async function searchIssues(
+  client: LinearClient,
+  term: string,
+  teamKey?: string,
+  limit: number = 20
+): Promise<IssueSearchOutput[]> {
+  try {
+    let teamId: string | undefined;
+
+    // If team key provided, resolve it to team ID
+    if (teamKey) {
+      const teams = await client.teams();
+      const team = teams.nodes.find(
+        (t) => t.key.toUpperCase() === teamKey.toUpperCase()
+      );
+
+      if (!team) {
+        throw new NotFoundError(`Team not found: ${teamKey}`);
+      }
+
+      teamId = team.id;
+    }
+
+    // Perform search
+    const searchPayload = await client.searchIssues(term, {
+      teamId,
+      first: limit,
+    });
+
+    // Resolve lazy-loaded fields for each result
+    const results = await Promise.all(
+      searchPayload.nodes.map(async (result: IssueSearchResult) => {
+        const [state, assignee] = await Promise.all([
+          result.state,
+          result.assignee,
+        ]);
+
+        return {
+          id: result.id,
+          identifier: result.identifier,
+          title: result.title,
+          description: result.description ?? null,
+          status: state?.name ?? null,
+          assignee: assignee?.name ?? null,
+          priority: result.priority,
+          createdAt: result.createdAt.toISOString(),
+          updatedAt: result.updatedAt.toISOString(),
+        };
+      })
+    );
+
+    return results;
   } catch (error) {
     // Re-throw NotFoundError as-is
     if (error instanceof NotFoundError) {

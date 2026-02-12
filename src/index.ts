@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import { loadEnv, saveApiKey, apiKeySchema } from './config.js';
 import { handleError, NotFoundError, EXIT_CODES } from './errors.js';
-import { createLinearClient, fetchIssueByIdentifier, listTeams, listTeamIssues, listTeamMembers, updateIssueStatus } from './linear-client.js';
+import { createLinearClient, fetchIssueByIdentifier, listTeams, listTeamIssues, listTeamMembers, updateIssueStatus, searchIssues } from './linear-client.js';
 
 const program = new Command();
 
@@ -30,6 +30,8 @@ program
 Commands:
   linear                        List all accessible teams
   linear members TEAM           List all members of a specific team
+  linear search <keywords>      Search issues across all teams (e.g., "linear search auth bug")
+  linear search <keywords> TEAM Search issues within a specific team
   linear TEAM                   List recent issues in a team (20 most recent)
   linear TEAM @username         Filter issues by assignee (matches name/email/displayName)
   linear TEAM @unassigned       List unassigned issues in a team
@@ -41,6 +43,9 @@ Examples:
   $ linear --key lin_api_xxx    Store your Linear API key
   $ linear                      Show all teams you have access to
   $ linear members ENG          Show all members of the ENG team
+  $ linear search "auth bug"    Search for issues matching "auth bug"
+  $ linear search "api error" ENG
+                                Search ENG team issues matching "api error"
   $ linear ENG                  Show 20 most recent issues in ENG team
   $ linear ENG @john            Show ENG issues assigned to users matching "john"
   $ linear ENG @unassigned      Show unassigned ENG issues
@@ -110,6 +115,32 @@ Authentication:
       if (firstArg.toLowerCase() === 'members' && secondArg) {
         const members = await listTeamMembers(client, secondArg);
         console.log(JSON.stringify(members, null, 2));
+        process.exit(EXIT_CODES.SUCCESS);
+      }
+
+      // "search" command: search issues by keywords
+      if (firstArg.toLowerCase() === 'search' && secondArg) {
+        // Combine all arguments after "search" as the search term
+        const searchArgs = args.slice(1);
+        
+        // Check if last argument is a team key (no spaces, not starting with @, and doesn't look like a multi-word query)
+        const lastArg = searchArgs[searchArgs.length - 1];
+        const isTeamKey = lastArg && !lastArg.includes(' ') && !lastArg.startsWith('@') && /^[A-Za-z]+$/.test(lastArg);
+        
+        let teamKey: string | undefined;
+        let searchTerm: string;
+        
+        if (isTeamKey && searchArgs.length > 1) {
+          // Last arg is a team key
+          teamKey = lastArg;
+          searchTerm = searchArgs.slice(0, -1).join(' ');
+        } else {
+          // No team key provided
+          searchTerm = searchArgs.join(' ');
+        }
+        
+        const results = await searchIssues(client, searchTerm, teamKey, 20);
+        console.log(JSON.stringify(results, null, 2));
         process.exit(EXIT_CODES.SUCCESS);
       }
 

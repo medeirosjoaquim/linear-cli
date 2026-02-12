@@ -187,3 +187,24 @@ export const TeamMemberOutputSchema = z.object({
  * Type representing a team member in output format
  */
 export type TeamMemberOutput = z.infer<typeof TeamMemberOutputSchema>;
+
+/**
+ * Schema for issue search result output data
+ * Represents a search result with relevance scoring
+ */
+export const IssueSearchOutputSchema = z.object({
+  id: z.string(),
+  identifier: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  status: z.string().nullable(),
+  assignee: z.string().nullable(),
+  priority: z.number(),
+  createdAt: z.string(), // ISO date string
+  updatedAt: z.string(), // ISO date string
+});
+
+/**
+ * Type representing an issue search result in output format
+ */
+export type IssueSearchOutput = z.infer<typeof IssueSearchOutputSchema>;
