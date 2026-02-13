@@ -86,6 +86,22 @@ export const IssueRefSchema = z.object({
 });
 
 /**
+ * Schema for subtask output data (full details)
+ */
+export const SubtaskOutputSchema = z.object({
+  id: z.string(),
+  identifier: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  status: z.string().nullable(),
+  assignee: z.string().nullable(),
+  priority: z.number(),
+  labels: z.array(z.string()),
+  createdAt: z.string(), // ISO date string
+  updatedAt: z.string(), // ISO date string
+});
+
+/**
  * Schema for history entry output data
  */
 export const HistoryEntrySchema = z.object({
@@ -109,6 +125,7 @@ export const CompleteIssueOutputSchema = IssueOutputSchema.extend({
   relations: z.array(RelationOutputSchema),
   parent: IssueRefSchema.nullable(),
   children: z.array(IssueRefSchema),
+  subtasks: z.array(SubtaskOutputSchema).optional(), // Full subtask details when --subtasks flag is used
   history: z.array(HistoryEntrySchema),
 });
 
@@ -126,6 +143,11 @@ export type RelationOutput = z.infer<typeof RelationOutputSchema>;
  * Type representing an issue reference (for parent/children)
  */
 export type IssueRef = z.infer<typeof IssueRefSchema>;
+
+/**
+ * Type representing a subtask with full details
+ */
+export type SubtaskOutput = z.infer<typeof SubtaskOutputSchema>;
 
 /**
  * Type representing a history entry in output format

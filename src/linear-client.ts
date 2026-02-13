@@ -1,7 +1,7 @@
 import { LinearClient, LinearError, LinearDocument } from '@linear/sdk';
-import type { Comment, IssueRelation, IssueHistory, IssueSearchResult } from '@linear/sdk';
+import type { Comment, Issue, IssueRelation, IssueHistory, IssueSearchResult } from '@linear/sdk';
 import { CLIError, AuthError, NotFoundError, EXIT_CODES } from './errors.js';
-import type { CommentOutput, RelationOutput, IssueRef, HistoryEntry, CompleteIssueOutput, TeamOutput, IssueListItem, TeamMemberOutput, IssueSearchOutput } from './types.js';
+import type { CommentOutput, RelationOutput, IssueRef, HistoryEntry, CompleteIssueOutput, TeamOutput, IssueListItem, TeamMemberOutput, IssueSearchOutput, SubtaskOutput } from './types.js';
 
 /**
  * Regex for parsing issue identifiers (e.g., "TEAM-123", "DEV456")
@@ -34,6 +34,35 @@ function parseIdentifier(identifier: string): { teamKey: string; number: number 
     teamKey: match[1].toUpperCase(),
     number: parseInt(match[2], 10),
   };
+}
+
+/**
+ * Resolve children with full details for subtasks
+ * @internal
+ */
+async function resolveSubtasks(children: Issue[]): Promise<SubtaskOutput[]> {
+  return Promise.all(
+    children.map(async (child) => {
+      const [state, assignee, labelsConnection] = await Promise.all([
+        child.state,
+        child.assignee,
+        child.labels(),
+      ]);
+
+      return {
+        id: child.id,
+        identifier: child.identifier,
+        title: child.title,
+        description: child.description ?? null,
+        status: state?.name ?? null,
+        assignee: assignee?.name ?? null,
+        priority: child.priority,
+        labels: labelsConnection.nodes.map((l: { name: string }) => l.name),
+        createdAt: child.createdAt.toISOString(),
+        updatedAt: child.updatedAt.toISOString(),
+      };
+    })
+  );
 }
 
 /**
@@ -144,7 +173,8 @@ async function resolveHistory(entries: IssueHistory[]): Promise<HistoryEntry[]> 
  */
 export async function fetchIssueByIdentifier(
   client: LinearClient,
-  identifier: string
+  identifier: string,
+  includeSubtasks: boolean = false
 ): Promise<CompleteIssueOutput | null> {
   const { number } = parseIdentifier(identifier);
 
@@ -190,6 +220,9 @@ export async function fetchIssueByIdentifier(
 
         const labels = labelsConnection.nodes.map((l) => l.name);
 
+        // Resolve full subtask details if requested
+        const subtasks = includeSubtasks ? await resolveSubtasks(childrenConnection.nodes) : undefined;
+
         return {
           id: issue.id,
           identifier: issue.identifier,
@@ -205,6 +238,7 @@ export async function fetchIssueByIdentifier(
           relations,
           parent: parent ? { id: parent.id, identifier: parent.identifier } : null,
           children: childrenConnection.nodes.map((c) => ({ id: c.id, identifier: c.identifier })),
+          subtasks,
           history,
         };
       }
