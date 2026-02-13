@@ -20,6 +20,7 @@ program
   .argument('[args...]', 'Command arguments (see examples below)')
   .option('-k, --key <apiKey>', 'Set and store API key')
   .option('-s, --status <status>', 'Update issue status (use with issue identifier)')
+  .option('--subtasks', 'Include full details of all subtasks when fetching an issue')
   .option('--created-after <date>', 'Filter issues created after date (ISO 8601 or YYYY-MM-DD)')
   .option('--created-before <date>', 'Filter issues created before date (ISO 8601 or YYYY-MM-DD)')
   .option('--updated-after <date>', 'Filter issues updated after date (ISO 8601 or YYYY-MM-DD)')
@@ -36,6 +37,7 @@ Commands:
   linear TEAM @username         Filter issues by assignee (matches name/email/displayName)
   linear TEAM @unassigned       List unassigned issues in a team
   linear TEAM-123               Fetch complete details for a specific issue
+  linear TEAM-123 --subtasks    Fetch issue with full subtask details
   linear TEAM-123 --status STATUS
                                 Update issue status (e.g., "In Progress", "Done")
 
@@ -50,6 +52,7 @@ Examples:
   $ linear ENG @john            Show ENG issues assigned to users matching "john"
   $ linear ENG @unassigned      Show unassigned ENG issues
   $ linear ENG-123              Show complete details for issue ENG-123
+  $ linear ENG-123 --subtasks   Show issue with full subtask details
   $ linear ENG-123 --status "In Progress"
                                 Update issue status to "In Progress"
   $ linear ENG-123 --status "Done"
@@ -74,6 +77,7 @@ Authentication:
   .action(async (args: string[] | undefined, options: {
     key?: string;
     status?: string;
+    subtasks?: boolean;
     createdAfter?: string;
     createdBefore?: string;
     updatedAfter?: string;
@@ -154,8 +158,8 @@ Authentication:
           process.exit(EXIT_CODES.SUCCESS);
         }
 
-        // Fetch issue details
-        const issue = await fetchIssueByIdentifier(client, firstArg.toUpperCase());
+        // Fetch issue details (with subtasks if flag is set)
+        const issue = await fetchIssueByIdentifier(client, firstArg.toUpperCase(), options.subtasks);
 
         if (!issue) {
           throw new NotFoundError(`Issue not found: ${firstArg}`);
