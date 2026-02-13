@@ -10,6 +10,7 @@ Linear CLI provides powerful querying, filtering, and update capabilities:
 - Filter issues by assignee (specific user or unassigned)
 - Filter issues by date ranges (created, updated, or completed)
 - Fetch complete issue details including comments, relations, parent/child hierarchy, and history
+- Fetch subtasks with full details using `--subtasks` flag
 - Update issue status (e.g., change from "Todo" to "In Progress")
 
 The CLI uses secure credential storage in `~/.config/linear-cli/credentials` and supports environment variables for CI/CD.
@@ -26,6 +27,7 @@ linear TEAM @username           # Filter by assignee
 linear TEAM @unassigned         # List unassigned issues
 linear TEAM --created-after=YYYY-MM-DD    # Filter by date
 linear TEAM-123                 # Fetch full details for issue TEAM-123
+linear TEAM-123 --subtasks      # Fetch issue with full subtask details
 linear TEAM-123 --status "In Progress"    # Update issue status
 linear --key KEY                # Store API key
 ```
