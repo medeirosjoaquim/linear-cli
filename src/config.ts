@@ -4,7 +4,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import * as readline from 'readline';
 
-const CONFIG_DIR = join(homedir(), '.config', 'linear-cli');
+const CONFIG_DIR = join(homedir(), '.linear');
 const CREDENTIALS_FILE = join(CONFIG_DIR, 'credentials');
 
 /**
@@ -51,7 +51,7 @@ export function saveApiKey(apiKey: string): void {
 /**
  * Load API key from credentials file
  */
-function loadStoredApiKey(): string | null {
+export function loadStoredApiKey(): string | null {
   if (!existsSync(CREDENTIALS_FILE)) {
     return null;
   }
