@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { loadEnv, saveApiKey, apiKeySchema } from './config.js';
+import { loadEnv, loadStoredApiKey, saveApiKey, apiKeySchema } from './config.js';
 import { handleError, NotFoundError, EXIT_CODES } from './errors.js';
 import { createLinearClient, fetchIssueByIdentifier, listTeams, listTeamIssues, listTeamMembers, updateIssueStatus, searchIssues } from './linear-client.js';
 
@@ -29,6 +29,7 @@ program
   .option('--completed-before <date>', 'Filter issues completed before date (ISO 8601 or YYYY-MM-DD)')
   .addHelpText('after', `
 Commands:
+  linear auth login             Authenticate by entering your API key interactively
   linear                        List all accessible teams
   linear members TEAM           List all members of a specific team
   linear search <keywords>      Search issues across all teams (e.g., "linear search auth bug")
@@ -42,6 +43,7 @@ Commands:
                                 Update issue status (e.g., "In Progress", "Done")
 
 Examples:
+  $ linear auth login            Authenticate interactively
   $ linear --key lin_api_xxx    Store your Linear API key
   $ linear                      Show all teams you have access to
   $ linear members ENG          Show all members of the ENG team
@@ -71,7 +73,7 @@ Output:
   Exit codes: 0=success, 1=config error, 2=auth error, 3=not found
 
 Authentication:
-  API key priority: LINEAR_API_KEY env var > ~/.config/linear-cli/credentials
+  API key priority: LINEAR_API_KEY env var > ~/.linear/credentials
   Get your key from: https://linear.app/settings/api
 `)
   .action(async (args: string[] | undefined, options: {
@@ -86,6 +88,35 @@ Authentication:
     completedBefore?: string;
   }) => {
     try {
+      // "auth login" command: prompt for API key (handle before loading env)
+      if (args && args.length >= 2 && args[0].toLowerCase() === 'auth' && args[1].toLowerCase() === 'login') {
+        const existing = loadStoredApiKey();
+        if (existing) {
+          console.error('You are already authenticated. To re-authenticate, run this command again.\n');
+        }
+
+        console.error('Get your API key from: https://linear.app/settings/api\n');
+
+        const readline = await import('readline');
+        const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+        const key = await new Promise<string>((resolve) => {
+          rl.question('Enter your Linear API key: ', (answer) => {
+            rl.close();
+            resolve(answer.trim());
+          });
+        });
+
+        const result = apiKeySchema.safeParse(key);
+        if (!result.success) {
+          console.error(`Invalid API key: ${result.error.errors[0].message}`);
+          process.exit(EXIT_CODES.CONFIG_ERROR);
+        }
+
+        saveApiKey(result.data);
+        console.error('API key saved. You are now authenticated.\n');
+        process.exit(EXIT_CODES.SUCCESS);
+      }
+
       let apiKey: string;
 
       // If --key provided, validate and save it
