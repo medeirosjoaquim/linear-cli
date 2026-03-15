@@ -269,6 +269,235 @@ export async function fetchIssueByIdentifier(
 }
 
 /**
+ * Input options for creating a new issue
+ */
+export interface CreateIssueInput {
+  title: string;
+  description?: string;
+  assignee?: string;
+  priority?: number;
+  status?: string;
+  labels?: string[];
+}
+
+/**
+ * Create a new Linear issue
+ *
+ * @param client - Linear API client
+ * @param teamKey - Team key (e.g., "TEAM")
+ * @param input - Issue creation input
+ * @returns Created issue data
+ * @throws NotFoundError if team or assignee is not found
+ * @throws AuthError if authentication fails (401)
+ * @throws CLIError for other API errors
+ */
+export async function createIssue(
+  client: LinearClient,
+  teamKey: string,
+  input: CreateIssueInput
+): Promise<CompleteIssueOutput> {
+  try {
+    // Find the team by key (case-insensitive)
+    const teams = await client.teams();
+    const team = teams.nodes.find(
+      (t) => t.key.toUpperCase() === teamKey.toUpperCase()
+    );
+
+    if (!team) {
+      throw new NotFoundError(`Team not found: ${teamKey}`);
+    }
+
+    // Build the create input
+    const createInput: Record<string, unknown> = {
+      teamId: team.id,
+      title: input.title,
+    };
+
+    if (input.description) {
+      createInput.description = input.description;
+    }
+
+    if (input.priority !== undefined) {
+      createInput.priority = input.priority;
+    }
+
+    // Resolve assignee if provided
+    if (input.assignee) {
+      const users = await client.users();
+      const user = users.nodes.find(
+        (u) =>
+          u.name.toLowerCase().includes(input.assignee!.toLowerCase()) ||
+          u.email.toLowerCase().includes(input.assignee!.toLowerCase()) ||
+          u.displayName.toLowerCase().includes(input.assignee!.toLowerCase())
+      );
+
+      if (!user) {
+        throw new NotFoundError(`User not found: ${input.assignee}`);
+      }
+      createInput.assigneeId = user.id;
+    }
+
+    // Resolve status if provided
+    if (input.status) {
+      const states = await team.states();
+      const targetState = states.nodes.find(
+        (state) => state.name.toLowerCase() === input.status!.toLowerCase()
+      );
+
+      if (!targetState) {
+        const availableStates = states.nodes.map((s) => s.name).join(', ');
+        throw new NotFoundError(
+          `Status not found: "${input.status}". Available statuses: ${availableStates}`
+        );
+      }
+      createInput.stateId = targetState.id;
+    }
+
+    // Resolve labels if provided
+    if (input.labels && input.labels.length > 0) {
+      const teamLabels = await team.labels();
+      const labelIds: string[] = [];
+
+      for (const labelName of input.labels) {
+        const label = teamLabels.nodes.find(
+          (l) => l.name.toLowerCase() === labelName.toLowerCase()
+        );
+        if (!label) {
+          const availableLabels = teamLabels.nodes.map((l) => l.name).join(', ');
+          throw new NotFoundError(
+            `Label not found: "${labelName}". Available labels: ${availableLabels}`
+          );
+        }
+        labelIds.push(label.id);
+      }
+      createInput.labelIds = labelIds;
+    }
+
+    // Create the issue
+    const payload = await client.createIssue(createInput as { teamId: string; title: string });
+
+    if (!payload.success) {
+      throw new CLIError('Failed to create issue', EXIT_CODES.UNEXPECTED);
+    }
+
+    const createdIssue = await payload.issue;
+    if (!createdIssue) {
+      throw new CLIError('Failed to fetch created issue', EXIT_CODES.UNEXPECTED);
+    }
+
+    // Fetch complete issue data
+    const fullIssue = await fetchIssueByIdentifier(client, createdIssue.identifier);
+    if (!fullIssue) {
+      throw new CLIError('Failed to fetch complete issue data', EXIT_CODES.UNEXPECTED);
+    }
+
+    return fullIssue;
+  } catch (error) {
+    // Re-throw known error types
+    if (error instanceof NotFoundError || error instanceof CLIError) {
+      throw error;
+    }
+
+    // Handle Linear SDK errors
+    if (error instanceof LinearError) {
+      if (error.status === 401) {
+        throw new AuthError('Invalid API key');
+      }
+      throw new CLIError(`Linear API error: ${error.message}`, EXIT_CODES.API_ERROR);
+    }
+
+    // Unexpected error
+    throw new CLIError(
+      `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
+      EXIT_CODES.UNEXPECTED
+    );
+  }
+}
+
+/**
+ * Add a comment to a Linear issue
+ *
+ * @param client - Linear API client
+ * @param identifier - Issue identifier (e.g., "TEAM-123")
+ * @param body - Comment body text (markdown supported)
+ * @returns Created comment data
+ * @throws NotFoundError if issue is not found
+ * @throws AuthError if authentication fails (401)
+ * @throws CLIError for other API errors
+ */
+export async function addComment(
+  client: LinearClient,
+  identifier: string,
+  body: string
+): Promise<CommentOutput> {
+  const { number } = parseIdentifier(identifier);
+
+  try {
+    // First, find the issue to get its ID
+    const issues = await client.issues({
+      filter: { number: { eq: number } },
+      first: 10,
+    });
+
+    let targetIssue = null;
+    for (const issue of issues.nodes) {
+      if (issue.identifier.toUpperCase() === identifier.toUpperCase()) {
+        targetIssue = issue;
+        break;
+      }
+    }
+
+    if (!targetIssue) {
+      throw new NotFoundError(`Issue not found: ${identifier}`);
+    }
+
+    // Create the comment
+    const payload = await client.createComment({
+      issueId: targetIssue.id,
+      body,
+    });
+
+    if (!payload.success) {
+      throw new CLIError('Failed to create comment', EXIT_CODES.UNEXPECTED);
+    }
+
+    const createdComment = await payload.comment;
+    if (!createdComment) {
+      throw new CLIError('Failed to fetch created comment', EXIT_CODES.UNEXPECTED);
+    }
+
+    // Resolve author
+    const user = await createdComment.user;
+
+    return {
+      id: createdComment.id,
+      body: createdComment.body,
+      createdAt: createdComment.createdAt.toISOString(),
+      author: user?.name ?? null,
+    };
+  } catch (error) {
+    // Re-throw known error types
+    if (error instanceof NotFoundError || error instanceof CLIError) {
+      throw error;
+    }
+
+    // Handle Linear SDK errors
+    if (error instanceof LinearError) {
+      if (error.status === 401) {
+        throw new AuthError('Invalid API key');
+      }
+      throw new CLIError(`Linear API error: ${error.message}`, EXIT_CODES.API_ERROR);
+    }
+
+    // Unexpected error
+    throw new CLIError(
+      `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
+      EXIT_CODES.UNEXPECTED
+    );
+  }
+}
+
+/**
  * List all accessible teams in the organization
  *
  * @param client - Linear API client
