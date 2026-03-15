@@ -6,14 +6,15 @@ A command-line tool for fetching and updating Linear ticket data as JSON. Locate
 
 - All output is JSON to stdout, errors to stderr
 - Exit codes: 0=success, 1=config error, 2=auth error, 3=not found
-- API key priority: `LINEAR_API_KEY` env var > `~/.config/linear-cli/credentials`
+- API key priority: `LINEAR_API_KEY` env var > `~/.linear/credentials`
 - Get your key from: https://linear.app/settings/api
 
 ## Commands
 
 ### Authentication
 ```bash
-linear --key lin_api_xxx        # Store API key
+linear auth login               # Interactive login (prompts for API key)
+linear --key lin_api_xxx        # Store API key directly
 ```
 
 ### Teams

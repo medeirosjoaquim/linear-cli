@@ -13,7 +13,8 @@ A command-line tool for fetching Linear ticket data as JSON. Built for automatio
 - **Fetch full details** — Get complete issue data including comments, relations, history
 - **JSON output** — Pipe to `jq`, save to files, or process programmatically
 - **Secure credentials** — API key stored safely in `~/.config/linear-cli/credentials`
-- **Read-only** — Cannot modify Linear data, safe for automation
+- **Create issues** — Create new issues in any team
+- **Add comments** — Add comments to existing issues
 
 ## Installation
 
@@ -380,11 +381,28 @@ pnpm typecheck
 
 # Build
 pnpm build
+
+# Run tests
+pnpm test
+
+# Run tests in watch mode
+pnpm test:watch
+```
+
+### Testing
+
+Tests use Vitest with mocked Linear SDK to avoid making real API calls. All write operations (createIssue, addComment, updateIssueStatus) are tested with dry-run mocks.
+
+```bash
+# Run all tests
+pnpm test
+
+# Run with coverage
+pnpm test -- --coverage
 ```
 
 ## Security
 
-- **Read-only**: The CLI only performs read operations. It cannot create, update, or delete any Linear data.
 - **Secure storage**: API keys are stored with chmod 600 (owner read/write only)
 - **No telemetry**: No data is sent anywhere except Linear's API
 - **Open source**: Full source code available for audit
