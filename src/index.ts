@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import { loadEnv, loadStoredApiKey, saveApiKey, apiKeySchema } from './config.js';
 import { handleError, NotFoundError, EXIT_CODES } from './errors.js';
-import { createLinearClient, fetchIssueByIdentifier, listTeams, listTeamIssues, listTeamMembers, updateIssueStatus, searchIssues } from './linear-client.js';
+import { createLinearClient, fetchIssueByIdentifier, listTeams, listTeamIssues, listTeamMembers, updateIssueStatus, searchIssues, createIssue, addComment } from './linear-client.js';
 
 const program = new Command();
 
@@ -16,7 +16,7 @@ program.configureOutput({
 program
   .name('linear')
   .description('CLI for fetching and updating Linear ticket data as JSON')
-  .version('0.1.0')
+  .version('0.2.0')
   .argument('[args...]', 'Command arguments (see examples below)')
   .option('-k, --key <apiKey>', 'Set and store API key')
   .option('-s, --status <status>', 'Update issue status (use with issue identifier)')
@@ -27,6 +27,11 @@ program
   .option('--updated-before <date>', 'Filter issues updated before date (ISO 8601 or YYYY-MM-DD)')
   .option('--completed-after <date>', 'Filter issues completed after date (ISO 8601 or YYYY-MM-DD)')
   .option('--completed-before <date>', 'Filter issues completed before date (ISO 8601 or YYYY-MM-DD)')
+  .option('-t, --title <title>', 'Issue title (for create command)')
+  .option('-d, --description <description>', 'Issue description (for create command)')
+  .option('-a, --assignee <assignee>', 'Assignee name/email (for create command)')
+  .option('-p, --priority <priority>', 'Issue priority: 1=Urgent, 2=High, 3=Normal, 4=Low (for create command)')
+  .option('-l, --labels <labels>', 'Comma-separated labels (for create command)')
   .addHelpText('after', `
 Commands:
   linear auth login             Authenticate by entering your API key interactively
@@ -41,6 +46,8 @@ Commands:
   linear TEAM-123 --subtasks    Fetch issue with full subtask details
   linear TEAM-123 --status STATUS
                                 Update issue status (e.g., "In Progress", "Done")
+  linear create TEAM            Create a new issue in the specified team
+  linear comment TEAM-123       Add a comment to an issue
 
 Examples:
   $ linear auth login            Authenticate interactively
@@ -59,6 +66,12 @@ Examples:
                                 Update issue status to "In Progress"
   $ linear ENG-123 --status "Done"
                                 Update issue status to "Done"
+  $ linear create ENG --title "Fix auth bug" --description "Details here"
+                                Create a new issue in ENG team
+  $ linear create ENG -t "Bug" -a "john" -p 2
+                                Create issue with assignee and priority
+  $ linear comment ENG-123 "This is a comment"
+                                Add a comment to an issue
   $ linear ENG-123 | jq         Pretty-print issue details with jq
   $ linear ENG | jq 'length'    Count recent issues in ENG team
   $ linear ENG --created-after=2024-01-01
@@ -86,6 +99,11 @@ Authentication:
     updatedBefore?: string;
     completedAfter?: string;
     completedBefore?: string;
+    title?: string;
+    description?: string;
+    assignee?: string;
+    priority?: string;
+    labels?: string;
   }) => {
     try {
       // "auth login" command: prompt for API key (handle before loading env)
@@ -176,6 +194,63 @@ Authentication:
         
         const results = await searchIssues(client, searchTerm, teamKey, 20);
         console.log(JSON.stringify(results, null, 2));
+        process.exit(EXIT_CODES.SUCCESS);
+      }
+
+      // "create TEAM" command: create a new issue
+      if (firstArg.toLowerCase() === 'create' && secondArg) {
+        if (!options.title) {
+          console.error('Error: --title is required when creating an issue');
+          console.error('Example: linear create TEAM --title "Fix bug"');
+          process.exit(EXIT_CODES.CONFIG_ERROR);
+        }
+
+        // Parse priority if provided
+        let priority: number | undefined;
+        if (options.priority) {
+          const priorityNum = parseInt(options.priority, 10);
+          if (isNaN(priorityNum) || priorityNum < 1 || priorityNum > 4) {
+            console.error('Error: Priority must be a number between 1 and 4 (1=Urgent, 2=High, 3=Normal, 4=Low)');
+            process.exit(EXIT_CODES.CONFIG_ERROR);
+          }
+          priority = priorityNum;
+        }
+
+        // Parse labels if provided
+        const labels = options.labels ? options.labels.split(',').map((l: string) => l.trim()).filter(Boolean) : undefined;
+
+        const newIssue = await createIssue(client, secondArg.toUpperCase(), {
+          title: options.title,
+          description: options.description,
+          assignee: options.assignee,
+          priority,
+          status: options.status,
+          labels,
+        });
+        console.log(JSON.stringify(newIssue, null, 2));
+        process.exit(EXIT_CODES.SUCCESS);
+      }
+
+      // "comment TEAM-123" command: add a comment to an issue
+      if (firstArg.toLowerCase() === 'comment' && secondArg) {
+        // Collect all remaining arguments as the comment body
+        const commentArgs = args.slice(1);
+        const commentBody = commentArgs.join(' ');
+
+        if (!commentBody) {
+          console.error('Error: Comment body is required');
+          console.error('Example: linear comment TEAM-123 "This is a comment"');
+          process.exit(EXIT_CODES.CONFIG_ERROR);
+        }
+
+        // Check if secondArg looks like an issue identifier
+        if (!secondArg.includes('-')) {
+          console.error(`Error: Invalid issue identifier: ${secondArg}. Expected format: TEAM-123`);
+          process.exit(EXIT_CODES.CONFIG_ERROR);
+        }
+
+        const newComment = await addComment(client, secondArg.toUpperCase(), commentBody);
+        console.log(JSON.stringify(newComment, null, 2));
         process.exit(EXIT_CODES.SUCCESS);
       }
 
