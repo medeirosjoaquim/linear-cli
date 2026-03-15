@@ -1,6 +1,6 @@
 {
   "name": "linear-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI for fetching Linear ticket data as JSON",
   "type": "module",
   "main": "dist/index.js",
@@ -10,7 +10,9 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --outDir bin && mv bin/index.js bin/linear && chmod +x bin/linear",
     "dev": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "linear",
@@ -33,6 +35,7 @@
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
     "tsx": "^4.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   }
 }
