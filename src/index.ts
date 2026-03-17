@@ -233,8 +233,8 @@ Authentication:
 
       // "comment TEAM-123" command: add a comment to an issue
       if (firstArg.toLowerCase() === 'comment' && secondArg) {
-        // Collect all remaining arguments as the comment body
-        const commentArgs = args.slice(1);
+        // Collect all arguments after the identifier as the comment body
+        const commentArgs = args.slice(2);
         const commentBody = commentArgs.join(' ');
 
         if (!commentBody) {
