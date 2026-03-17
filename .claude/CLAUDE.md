@@ -56,6 +56,20 @@ linear TEAM-123 --subtasks      # Fetch issue with full subtask details
 linear TEAM-123 --status "Done" # Update issue status
 ```
 
+### Create Issue
+```bash
+linear create TEAM --title "Fix bug"                          # Create issue (title required)
+linear create TEAM -t "Fix bug" -d "Details here"             # With description
+linear create TEAM -t "Fix bug" -a "john" -p 2                # With assignee and priority
+linear create TEAM -t "Fix bug" -l "bug,frontend"             # With labels
+linear create TEAM -t "Fix bug" --status "In Progress"        # With initial status
+```
+
+### Add Comment
+```bash
+linear comment TEAM-123 "This is a comment"                   # Add comment to issue
+```
+
 ## Options Reference
 
 | Option | Description |
@@ -69,6 +83,11 @@ linear TEAM-123 --status "Done" # Update issue status
 | `--updated-before <date>` | Filter issues updated before date |
 | `--completed-after <date>` | Filter issues completed after date |
 | `--completed-before <date>` | Filter issues completed before date |
+| `-t, --title <title>` | Issue title (required for create command) |
+| `-d, --description <desc>` | Issue description (for create command) |
+| `-a, --assignee <assignee>` | Assignee name/email (for create command) |
+| `-p, --priority <priority>` | Priority: 1=Urgent, 2=High, 3=Normal, 4=Low (for create command) |
+| `-l, --labels <labels>` | Comma-separated labels (for create command) |
 
 ## JSON Output Schemas
 
@@ -157,6 +176,14 @@ linear TEAM-123 --status "Done" # Update issue status
 ]
 ```
 
+### Created Issue (`linear create TEAM ...`)
+Returns the same full issue object as `linear TEAM-123`.
+
+### Comment (`linear comment TEAM-123 "text"`)
+```json
+{"id": "uuid", "body": "string", "createdAt": "ISO-8601", "author": "string"}
+```
+
 ## Common Usage Patterns
 
 ```bash
@@ -183,6 +210,9 @@ linear search "critical" | jq '[.[] | select(.status == "In Progress")]'
 
 # Count search results
 linear search "bug" | jq 'length'
+
+# Create issue and get identifier
+linear create ENG -t "Fix auth bug" -d "Details" | jq '.identifier'
 ```
 
 ## Status Values
@@ -205,3 +235,5 @@ Common status values (case-insensitive when updating):
 - Getting structured data about Linear tickets for analysis or reporting
 - Updating issue status as part of workflow automation
 - Fetching subtask details with parent issue in a single command
+- Creating new issues with title, description, assignee, priority, labels, and initial status
+- Adding comments to existing issues

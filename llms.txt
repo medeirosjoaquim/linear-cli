@@ -12,6 +12,8 @@ Linear CLI provides powerful querying, filtering, and update capabilities:
 - Fetch complete issue details including comments, relations, parent/child hierarchy, and history
 - Fetch subtasks with full details using `--subtasks` flag
 - Update issue status (e.g., change from "Todo" to "In Progress")
+- Create new issues with title, description, assignee, priority, labels, and initial status
+- Add comments to existing issues (supports markdown)
 
 The CLI uses secure credential storage in `~/.config/linear-cli/credentials` and supports environment variables for CI/CD.
 
@@ -29,6 +31,8 @@ linear TEAM --created-after=YYYY-MM-DD    # Filter by date
 linear TEAM-123                 # Fetch full details for issue TEAM-123
 linear TEAM-123 --subtasks      # Fetch issue with full subtask details
 linear TEAM-123 --status "In Progress"    # Update issue status
+linear create TEAM -t "Title" -d "Desc" -a "user" -p 2 -l "bug,ui"  # Create issue
+linear comment TEAM-123 "Comment text"   # Add comment to issue
 linear --key KEY                # Store API key
 ```
 
@@ -56,6 +60,8 @@ linear --key KEY                # Store API key
 - **Filtering**: Supports assignee filtering (@username, @unassigned) and date range filtering (--created-after/before, --updated-after/before, --completed-after/before)
 - **Date Formats**: ISO 8601 or YYYY-MM-DD
 - **Updates**: Supports updating issue status with `--status` option (status names are case-insensitive)
+- **Create**: Create issues with `-t` (title, required), `-d` (description), `-a` (assignee), `-p` (priority 1-4), `-l` (labels), `-s` (status)
+- **Comments**: Add comments to issues with `linear comment TEAM-123 "text"`
 
 ## Optional
 
