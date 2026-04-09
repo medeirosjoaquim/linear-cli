@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import { loadEnv, loadStoredApiKey, saveApiKey, apiKeySchema } from './config.js';
 import { handleError, NotFoundError, EXIT_CODES } from './errors.js';
-import { createLinearClient, fetchIssueByIdentifier, listTeams, listTeamIssues, listTeamMembers, updateIssueStatus, searchIssues, createIssue, addComment } from './linear-client.js';
+import { createLinearClient, fetchIssueByIdentifier, listTeams, listTeamIssues, listTeamMembers, updateIssue, searchIssues, createIssue, addComment } from './linear-client.js';
 
 const program = new Command();
 
@@ -27,8 +27,8 @@ program
   .option('--updated-before <date>', 'Filter issues updated before date (ISO 8601 or YYYY-MM-DD)')
   .option('--completed-after <date>', 'Filter issues completed after date (ISO 8601 or YYYY-MM-DD)')
   .option('--completed-before <date>', 'Filter issues completed before date (ISO 8601 or YYYY-MM-DD)')
-  .option('-t, --title <title>', 'Issue title (for create command)')
-  .option('-d, --description <description>', 'Issue description (for create command)')
+  .option('-t, --title <title>', 'Issue title (for create or edit)')
+  .option('-d, --description <description>', 'Issue description (for create or edit)')
   .option('-a, --assignee <assignee>', 'Assignee name/email (for create command)')
   .option('-p, --priority <priority>', 'Issue priority: 1=Urgent, 2=High, 3=Normal, 4=Low (for create command)')
   .option('-l, --labels <labels>', 'Comma-separated labels (for create command)')
@@ -46,6 +46,10 @@ Commands:
   linear TEAM-123 --subtasks    Fetch issue with full subtask details
   linear TEAM-123 --status STATUS
                                 Update issue status (e.g., "In Progress", "Done")
+  linear TEAM-123 --title "New title"
+                                Update issue title
+  linear TEAM-123 --description "New desc"
+                                Update issue description
   linear create TEAM            Create a new issue in the specified team
   linear comment TEAM-123       Add a comment to an issue
 
@@ -66,6 +70,10 @@ Examples:
                                 Update issue status to "In Progress"
   $ linear ENG-123 --status "Done"
                                 Update issue status to "Done"
+  $ linear ENG-123 --title "Updated title" --description "New details"
+                                Update issue title and description
+  $ linear ENG-123 --title "Fix" --status "In Progress"
+                                Update title and status in one call
   $ linear create ENG --title "Fix auth bug" --description "Details here"
                                 Create a new issue in ENG team
   $ linear create ENG -t "Bug" -a "john" -p 2
@@ -81,9 +89,25 @@ Examples:
   $ linear ENG @john --completed-after=2024-01-01
                                 Show John's completed issues since Jan 1, 2024
 
+Cross-tool workflow (webhook outage debugging):
+  $ linear search "webhook" COC   Find webhook-related issues
+  $ linear COC-XXXX | jq '{title, description, status}'
+                                Read issue details for context
+  $ openpay-cli --prod webhook debug --email patient@example.com --pending-only
+                                Check if webhooks were delivered
+  $ openpay-cli --prod webhook pending --start-date 2026-04-06
+                                Find all payments with stuck webhooks
+  $ linear comment COC-XXXX "Confirmed: N events with pending_webhooks > 0 between DATE and DATE"
+                                Report findings back on the ticket
+
 Output:
   All data is output as JSON to stdout. Errors go to stderr.
   Exit codes: 0=success, 1=config error, 2=auth error, 3=not found
+
+Notes:
+  Issues are fetched directly by identifier (e.g., MKTG-48, COC-3773) and work
+  across any team your API key has access to. Your API key must belong to a user
+  who is a member of the target team.
 
 Authentication:
   API key priority: LINEAR_API_KEY env var > ~/.linear/credentials
@@ -254,12 +278,15 @@ Authentication:
         process.exit(EXIT_CODES.SUCCESS);
       }
 
-      // Has dash: fetch specific ticket (TEAM-123) or update status
+      // Has dash: fetch specific ticket (TEAM-123) or update fields
       if (firstArg.includes('-')) {
-        // Check if --status option is provided
-        if (options.status) {
-          // Update issue status
-          const updatedIssue = await updateIssueStatus(client, firstArg.toUpperCase(), options.status);
+        // Check if any update options are provided
+        if (options.status || options.title || options.description) {
+          const updatedIssue = await updateIssue(client, firstArg.toUpperCase(), {
+            status: options.status,
+            title: options.title,
+            description: options.description,
+          });
           console.log(JSON.stringify(updatedIssue, null, 2));
           process.exit(EXIT_CODES.SUCCESS);
         }
