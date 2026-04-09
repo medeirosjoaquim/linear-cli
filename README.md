@@ -68,6 +68,9 @@ Requires Node.js 22+.
 
 # Fetch full issue details
 ./bin/linear TEAM-123
+
+# Update issue title and/or description
+./bin/linear TEAM-123 --title "New title" --description "Updated details"
 ```
 
 ## Usage
@@ -79,15 +82,22 @@ Arguments:
   args                       Command arguments: [TEAM|TEAM-123|members TEAM|search <keywords>] [@assignee]
 
 Options:
-  -V, --version              output the version number
-  -k, --key <apiKey>         Set and store API key
-  --created-after <date>     Filter issues created after date (ISO 8601 or YYYY-MM-DD)
-  --created-before <date>    Filter issues created before date (ISO 8601 or YYYY-MM-DD)
-  --updated-after <date>     Filter issues updated after date (ISO 8601 or YYYY-MM-DD)
-  --updated-before <date>    Filter issues updated before date (ISO 8601 or YYYY-MM-DD)
-  --completed-after <date>   Filter issues completed after date (ISO 8601 or YYYY-MM-DD)
-  --completed-before <date>  Filter issues completed before date (ISO 8601 or YYYY-MM-DD)
-  -h, --help                 display help for command
+  -V, --version                    output the version number
+  -k, --key <apiKey>               Set and store API key
+  -s, --status <status>            Update issue status (use with issue identifier)
+  --subtasks                       Include full details of all subtasks when fetching an issue
+  --created-after <date>           Filter issues created after date (ISO 8601 or YYYY-MM-DD)
+  --created-before <date>          Filter issues created before date (ISO 8601 or YYYY-MM-DD)
+  --updated-after <date>           Filter issues updated after date (ISO 8601 or YYYY-MM-DD)
+  --updated-before <date>          Filter issues updated before date (ISO 8601 or YYYY-MM-DD)
+  --completed-after <date>         Filter issues completed after date (ISO 8601 or YYYY-MM-DD)
+  --completed-before <date>        Filter issues completed before date (ISO 8601 or YYYY-MM-DD)
+  -t, --title <title>              Issue title (for create or edit)
+  -d, --description <description>  Issue description (for create or edit)
+  -a, --assignee <assignee>        Assignee name/email (for create command)
+  -p, --priority <priority>        Issue priority: 1=Urgent, 2=High, 3=Normal, 4=Low (for create command)
+  -l, --labels <labels>            Comma-separated labels (for create command)
+  -h, --help                       display help for command
 ```
 
 ### Examples
@@ -391,7 +401,7 @@ pnpm test:watch
 
 ### Testing
 
-Tests use Vitest with mocked Linear SDK to avoid making real API calls. All write operations (createIssue, addComment, updateIssueStatus) are tested with dry-run mocks.
+Tests use Vitest with mocked Linear SDK to avoid making real API calls. All write operations (createIssue, addComment, updateIssue) are tested with dry-run mocks.
 
 ```bash
 # Run all tests

@@ -54,6 +54,9 @@ linear TEAM @john --completed-after=2024-01-01
 linear TEAM-123                 # Fetch complete details for a specific issue
 linear TEAM-123 --subtasks      # Fetch issue with full subtask details
 linear TEAM-123 --status "Done" # Update issue status
+linear TEAM-123 --title "New title"           # Update issue title
+linear TEAM-123 --description "New details"   # Update issue description
+linear TEAM-123 --title "Fix" --status "In Progress"  # Update multiple fields
 ```
 
 ### Create Issue
@@ -83,8 +86,8 @@ linear comment TEAM-123 "This is a comment"                   # Add comment to i
 | `--updated-before <date>` | Filter issues updated before date |
 | `--completed-after <date>` | Filter issues completed after date |
 | `--completed-before <date>` | Filter issues completed before date |
-| `-t, --title <title>` | Issue title (required for create command) |
-| `-d, --description <desc>` | Issue description (for create command) |
+| `-t, --title <title>` | Issue title (for create or edit) |
+| `-d, --description <desc>` | Issue description (for create or edit) |
 | `-a, --assignee <assignee>` | Assignee name/email (for create command) |
 | `-p, --priority <priority>` | Priority: 1=Urgent, 2=High, 3=Normal, 4=Low (for create command) |
 | `-l, --labels <labels>` | Comma-separated labels (for create command) |
@@ -224,6 +227,30 @@ Common status values (case-insensitive when updating):
 - `Staging/ Pre-Pro Deployed`
 - `Ready For Production`
 - `Duplicate`
+
+## Notes
+
+- Issues are fetched directly by identifier (e.g., MKTG-48, COC-3773) and work across any team your API key user is a member of
+- If an issue returns "not found", the API key user likely needs to be added to that team in Linear
+
+## Cross-tool Workflow: Webhook Outage Debugging
+
+When a Linear ticket reports missing webhooks or payments that didn't create orders, combine linear-cli with openpay-cli:
+
+```bash
+# 1. Find and read the issue
+linear search "webhook" COC
+linear COC-XXXX | jq '{title, description, status, comments}'
+
+# 2. Debug webhook delivery with openpay-cli
+openpay-cli --prod webhook debug --email patient@example.com --pending-only
+
+# 3. Measure outage scope
+openpay-cli --prod webhook pending --start-date 2026-04-06
+
+# 4. Report findings back on the Linear ticket
+linear comment COC-XXXX "Confirmed: N events with pending_webhooks > 0 between DATE and DATE. Reported to OpenPay for replay."
+```
 
 ## When to Use
 

@@ -11,7 +11,7 @@ Linear CLI provides powerful querying, filtering, and update capabilities:
 - Filter issues by date ranges (created, updated, or completed)
 - Fetch complete issue details including comments, relations, parent/child hierarchy, and history
 - Fetch subtasks with full details using `--subtasks` flag
-- Update issue status (e.g., change from "Todo" to "In Progress")
+- Update issue status, title, and/or description
 - Create new issues with title, description, assignee, priority, labels, and initial status
 - Add comments to existing issues (supports markdown)
 
@@ -31,6 +31,9 @@ linear TEAM --created-after=YYYY-MM-DD    # Filter by date
 linear TEAM-123                 # Fetch full details for issue TEAM-123
 linear TEAM-123 --subtasks      # Fetch issue with full subtask details
 linear TEAM-123 --status "In Progress"    # Update issue status
+linear TEAM-123 --title "New title"       # Update issue title
+linear TEAM-123 --description "New desc"  # Update issue description
+linear TEAM-123 --title "Fix" --status "In Progress"  # Update multiple fields
 linear create TEAM -t "Title" -d "Desc" -a "user" -p 2 -l "bug,ui"  # Create issue
 linear comment TEAM-123 "Comment text"   # Add comment to issue
 linear --key KEY                # Store API key
@@ -59,9 +62,29 @@ linear --key KEY                # Store API key
 - **Search**: Natural language search across all teams or scoped to a specific team
 - **Filtering**: Supports assignee filtering (@username, @unassigned) and date range filtering (--created-after/before, --updated-after/before, --completed-after/before)
 - **Date Formats**: ISO 8601 or YYYY-MM-DD
-- **Updates**: Supports updating issue status with `--status` option (status names are case-insensitive)
+- **Updates**: Supports updating issue title (`--title`), description (`--description`), and status (`--status`). Can combine multiple in one call. Status names are case-insensitive
 - **Create**: Create issues with `-t` (title, required), `-d` (description), `-a` (assignee), `-p` (priority 1-4), `-l` (labels), `-s` (status)
 - **Comments**: Add comments to issues with `linear comment TEAM-123 "text"`
+- **Cross-team access**: Issues are fetched directly by identifier (e.g., MKTG-48, COC-3773) and work across any team your API key user is a member of
+
+## Cross-tool Workflow: Webhook Outage Debugging
+
+When a Linear ticket reports missing webhooks or payments that didn't create orders, combine Linear CLI with openpay-cli to diagnose:
+
+```
+# 1. Find the issue in Linear and read context
+linear search "webhook" COC
+linear COC-XXXX | jq '{title, description, status, comments}'
+
+# 2. Check specific payment webhook delivery with openpay-cli
+openpay-cli --prod webhook debug --email patient@example.com --pending-only
+
+# 3. If pending_webhooks > 0, measure outage scope
+openpay-cli --prod webhook pending --start-date 2026-04-06
+
+# 4. Report findings back on the Linear ticket
+linear comment COC-XXXX "Confirmed: N events with pending_webhooks > 0 between DATE and DATE. Reported to OpenPay for replay."
+```
 
 ## Optional
 
