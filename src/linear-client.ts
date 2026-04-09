@@ -1,5 +1,5 @@
 import { LinearClient, LinearError, LinearDocument } from '@linear/sdk';
-import type { Comment, Issue, IssueRelation, IssueHistory, IssueSearchResult } from '@linear/sdk';
+import type { Comment, Issue, IssueRelation, IssueHistory, IssueSearchResult, Team } from '@linear/sdk';
 import { CLIError, AuthError, NotFoundError, EXIT_CODES } from './errors.js';
 import type { CommentOutput, RelationOutput, IssueRef, HistoryEntry, CompleteIssueOutput, TeamOutput, IssueListItem, TeamMemberOutput, IssueSearchOutput, SubtaskOutput } from './types.js';
 
@@ -176,83 +176,81 @@ export async function fetchIssueByIdentifier(
   identifier: string,
   includeSubtasks: boolean = false
 ): Promise<CompleteIssueOutput | null> {
-  const { number } = parseIdentifier(identifier);
+  parseIdentifier(identifier); // validate format
 
   try {
-    // Query issues by number (identifier filter not directly supported)
-    const issues = await client.issues({
-      filter: { number: { eq: number } },
-      first: 10, // Multiple teams may have same issue number
-    });
+    // Linear API accepts identifier strings (e.g., "MKTG-48") directly
+    const issue = await client.issue(identifier);
 
-    // Find exact identifier match (case-insensitive)
-    for (const issue of issues.nodes) {
-      if (issue.identifier.toUpperCase() === identifier.toUpperCase()) {
-        // Fetch all nested data in parallel (core fields + complete data)
-        const [
-          state,
-          assignee,
-          labelsConnection,
-          commentsConnection,
-          relationsConnection,
-          inverseRelationsConnection,
-          childrenConnection,
-          parent,
-          historyConnection,
-        ] = await Promise.all([
-          issue.state,
-          issue.assignee,
-          issue.labels(),
-          issue.comments(),
-          issue.relations(),
-          issue.inverseRelations(),
-          issue.children(),
-          issue.parent,
-          issue.history(),
-        ]);
+    // Fetch all nested data in parallel (core fields + complete data)
+    const [
+      state,
+      assignee,
+      labelsConnection,
+      commentsConnection,
+      relationsConnection,
+      inverseRelationsConnection,
+      childrenConnection,
+      parent,
+      historyConnection,
+    ] = await Promise.all([
+      issue.state,
+      issue.assignee,
+      issue.labels(),
+      issue.comments(),
+      issue.relations(),
+      issue.inverseRelations(),
+      issue.children(),
+      issue.parent,
+      issue.history(),
+    ]);
 
-        // Resolve nested data (comments, relations, history) in parallel
-        const [comments, relations, history] = await Promise.all([
-          resolveComments(commentsConnection.nodes),
-          resolveRelations(relationsConnection.nodes, inverseRelationsConnection.nodes),
-          resolveHistory(historyConnection.nodes),
-        ]);
+    // Resolve nested data (comments, relations, history) in parallel
+    const [comments, relations, history] = await Promise.all([
+      resolveComments(commentsConnection.nodes),
+      resolveRelations(relationsConnection.nodes, inverseRelationsConnection.nodes),
+      resolveHistory(historyConnection.nodes),
+    ]);
 
-        const labels = labelsConnection.nodes.map((l) => l.name);
+    const labels = labelsConnection.nodes.map((l) => l.name);
 
-        // Resolve full subtask details if requested
-        const subtasks = includeSubtasks ? await resolveSubtasks(childrenConnection.nodes) : undefined;
+    // Resolve full subtask details if requested
+    const subtasks = includeSubtasks ? await resolveSubtasks(childrenConnection.nodes) : undefined;
 
-        return {
-          id: issue.id,
-          identifier: issue.identifier,
-          title: issue.title,
-          description: issue.description ?? null,
-          status: state?.name ?? null,
-          assignee: assignee?.name ?? null,
-          priority: issue.priority,
-          labels,
-          createdAt: issue.createdAt.toISOString(),
-          updatedAt: issue.updatedAt.toISOString(),
-          comments,
-          relations,
-          parent: parent ? { id: parent.id, identifier: parent.identifier } : null,
-          children: childrenConnection.nodes.map((c) => ({ id: c.id, identifier: c.identifier })),
-          subtasks,
-          history,
-        };
-      }
-    }
-
-    // No matching issue found
-    return null;
+    return {
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      description: issue.description ?? null,
+      status: state?.name ?? null,
+      assignee: assignee?.name ?? null,
+      priority: issue.priority,
+      labels,
+      createdAt: issue.createdAt.toISOString(),
+      updatedAt: issue.updatedAt.toISOString(),
+      comments,
+      relations,
+      parent: parent ? { id: parent.id, identifier: parent.identifier } : null,
+      children: childrenConnection.nodes.map((c) => ({ id: c.id, identifier: c.identifier })),
+      subtasks,
+      history,
+    };
   } catch (error) {
     // Handle Linear SDK errors
     if (error instanceof LinearError) {
       if (error.status === 401) {
         throw new AuthError('Invalid API key');
       }
+      // Treat 404 / "not found" as null return
+      if (error.status === 404 || error.message?.toLowerCase().includes('not found')) {
+        return null;
+      }
       throw new CLIError(`Linear API error: ${error.message}`, EXIT_CODES.API_ERROR);
+    }
+
+    // Entity not found errors from the SDK (e.g., "Entity not found")
+    if (error instanceof Error && error.message?.toLowerCase().includes('entity not found')) {
+      return null;
     }
 
     // Re-throw CLIError (e.g., from parseIdentifier)
@@ -297,15 +295,7 @@ export async function createIssue(
   input: CreateIssueInput
 ): Promise<CompleteIssueOutput> {
   try {
-    // Find the team by key (case-insensitive)
-    const teams = await client.teams();
-    const team = teams.nodes.find(
-      (t) => t.key.toUpperCase() === teamKey.toUpperCase()
-    );
-
-    if (!team) {
-      throw new NotFoundError(`Team not found: ${teamKey}`);
-    }
+    const team = await findTeamByKey(client, teamKey);
 
     // Build the create input
     const createInput: Record<string, unknown> = {
@@ -430,24 +420,14 @@ export async function addComment(
   identifier: string,
   body: string
 ): Promise<CommentOutput> {
-  const { number } = parseIdentifier(identifier);
+  parseIdentifier(identifier); // validate format
 
   try {
-    // First, find the issue to get its ID
-    const issues = await client.issues({
-      filter: { number: { eq: number } },
-      first: 10,
-    });
-
-    let targetIssue = null;
-    for (const issue of issues.nodes) {
-      if (issue.identifier.toUpperCase() === identifier.toUpperCase()) {
-        targetIssue = issue;
-        break;
-      }
-    }
-
-    if (!targetIssue) {
+    // Fetch the issue directly by identifier
+    let targetIssue;
+    try {
+      targetIssue = await client.issue(identifier);
+    } catch {
       throw new NotFoundError(`Issue not found: ${identifier}`);
     }
 
@@ -532,6 +512,22 @@ export async function listTeams(client: LinearClient): Promise<TeamOutput[]> {
 }
 
 /**
+ * Find a team by its key using a filtered query.
+ * Uses filter parameter to find teams even when the viewer isn't a member.
+ * @internal
+ */
+async function findTeamByKey(client: LinearClient, teamKey: string): Promise<Team> {
+  const teams = await client.teams({
+    filter: { key: { eq: teamKey.toUpperCase() } },
+  });
+  const team = teams.nodes[0];
+  if (!team) {
+    throw new NotFoundError(`Team not found: ${teamKey}`);
+  }
+  return team;
+}
+
+/**
  * List all members of a team
  *
  * @param client - Linear API client
@@ -546,15 +542,7 @@ export async function listTeamMembers(
   teamKey: string
 ): Promise<TeamMemberOutput[]> {
   try {
-    // First find the team by key (case-insensitive)
-    const teams = await client.teams();
-    const team = teams.nodes.find(
-      (t) => t.key.toUpperCase() === teamKey.toUpperCase()
-    );
-
-    if (!team) {
-      throw new NotFoundError(`Team not found: ${teamKey}`);
-    }
+    const team = await findTeamByKey(client, teamKey);
 
     // Fetch team members
     const membersConnection = await team.members();
@@ -639,17 +627,10 @@ export async function listTeamIssues(
   dateFilters?: DateFilters
 ): Promise<IssueListItem[]> {
   try {
-    // First find the team by key (case-insensitive)
-    const teams = await client.teams();
-    const team = teams.nodes.find(
-      (t) => t.key.toUpperCase() === teamKey.toUpperCase()
-    );
+    // Validate team exists and is accessible
+    const team = await findTeamByKey(client, teamKey);
 
-    if (!team) {
-      throw new NotFoundError(`Team not found: ${teamKey}`);
-    }
-
-    // Build filter object
+    // Build filter using team ID
     const filter: any = { team: { id: { eq: team.id } } };
 
     // Add assignee filter if provided
@@ -773,15 +754,7 @@ export async function searchIssues(
 
     // If team key provided, resolve it to team ID
     if (teamKey) {
-      const teams = await client.teams();
-      const team = teams.nodes.find(
-        (t) => t.key.toUpperCase() === teamKey.toUpperCase()
-      );
-
-      if (!team) {
-        throw new NotFoundError(`Team not found: ${teamKey}`);
-      }
-
+      const team = await findTeamByKey(client, teamKey);
       teamId = team.id;
     }
 
@@ -837,68 +810,79 @@ export async function searchIssues(
 }
 
 /**
- * Update the status of a Linear issue
+ * Input options for updating an existing issue
+ */
+export interface UpdateIssueInput {
+  title?: string;
+  description?: string;
+  status?: string;
+}
+
+/**
+ * Update a Linear issue's title, description, and/or status
  *
  * @param client - Linear API client
  * @param identifier - Issue identifier (e.g., "TEAM-123")
- * @param statusName - New status name (e.g., "In Progress")
+ * @param input - Fields to update (title, description, status)
  * @returns Updated issue data
  * @throws NotFoundError if issue or status is not found
  * @throws AuthError if authentication fails (401)
  * @throws CLIError for other API errors
  */
-export async function updateIssueStatus(
+export async function updateIssue(
   client: LinearClient,
   identifier: string,
-  statusName: string
+  input: UpdateIssueInput
 ): Promise<CompleteIssueOutput> {
-  const { number } = parseIdentifier(identifier);
+  parseIdentifier(identifier); // validate format
 
   try {
-    // First, find the issue
-    const issues = await client.issues({
-      filter: { number: { eq: number } },
-      first: 10,
-    });
-
-    let targetIssue = null;
-    for (const issue of issues.nodes) {
-      if (issue.identifier.toUpperCase() === identifier.toUpperCase()) {
-        targetIssue = issue;
-        break;
-      }
-    }
-
-    if (!targetIssue) {
+    // Fetch the issue directly by identifier
+    let targetIssue;
+    try {
+      targetIssue = await client.issue(identifier);
+    } catch {
       throw new NotFoundError(`Issue not found: ${identifier}`);
     }
 
-    // Get the team to find available workflow states
-    const team = await targetIssue.team;
-    if (!team) {
-      throw new CLIError(`Cannot determine team for issue: ${identifier}`, EXIT_CODES.UNEXPECTED);
+    const updateFields: Record<string, unknown> = {};
+
+    if (input.title !== undefined) {
+      updateFields.title = input.title;
     }
 
-    const states = await team.states();
-    const targetState = states.nodes.find(
-      (state) => state.name.toLowerCase() === statusName.toLowerCase()
-    );
+    if (input.description !== undefined) {
+      updateFields.description = input.description;
+    }
 
-    if (!targetState) {
-      const availableStates = states.nodes.map((s) => s.name).join(', ');
-      throw new NotFoundError(
-        `Status not found: "${statusName}". Available statuses: ${availableStates}`
+    // Resolve status name to state ID if provided
+    if (input.status) {
+      const team = await targetIssue.team;
+      if (!team) {
+        throw new CLIError(`Cannot determine team for issue: ${identifier}`, EXIT_CODES.UNEXPECTED);
+      }
+
+      const states = await team.states();
+      const targetState = states.nodes.find(
+        (state) => state.name.toLowerCase() === input.status!.toLowerCase()
       );
+
+      if (!targetState) {
+        const availableStates = states.nodes.map((s) => s.name).join(', ');
+        throw new NotFoundError(
+          `Status not found: "${input.status}". Available statuses: ${availableStates}`
+        );
+      }
+
+      updateFields.stateId = targetState.id;
     }
 
-    // Update the issue status
-    const updatePayload = await client.updateIssue(targetIssue.id, {
-      stateId: targetState.id,
-    });
+    // Update the issue
+    const updatePayload = await client.updateIssue(targetIssue.id, updateFields);
 
     const updateResult = await updatePayload.issue;
     if (!updateResult) {
-      throw new CLIError('Failed to update issue status', EXIT_CODES.UNEXPECTED);
+      throw new CLIError('Failed to update issue', EXIT_CODES.UNEXPECTED);
     }
 
     // Fetch complete updated issue data
