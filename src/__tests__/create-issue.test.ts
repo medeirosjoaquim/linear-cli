@@ -66,12 +66,13 @@ describe('createIssue', () => {
   });
 
   it('should throw NotFoundError when team does not exist', async () => {
+    // findTeamByKey uses a filter, so mock returns empty when key doesn't match
     mockClient.teams.mockResolvedValue({
-      nodes: [{ id: 'team-123', key: 'ENG', name: 'Engineering' }]
+      nodes: []
     });
 
     const input: CreateIssueInput = { title: 'Test Issue' };
-    
+
     await expect(createIssue(mockClient as LinearClient, 'NONEXISTENT', input))
       .rejects
       .toThrow(NotFoundError);

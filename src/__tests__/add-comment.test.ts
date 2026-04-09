@@ -25,31 +25,23 @@ describe('addComment', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     mockClient = {
-      issues: vi.fn(),
+      issue: vi.fn(),
       createComment: vi.fn()
     };
   });
 
   it('should add a comment to an existing issue', async () => {
-    // Setup mock issue
     const mockIssue = {
       id: 'issue-123',
       identifier: 'ENG-42',
       title: 'Test Issue'
     };
 
-    mockClient.issues.mockResolvedValue({
-      nodes: [mockIssue]
-    });
+    mockClient.issue.mockResolvedValue(mockIssue);
 
-    // Setup mock user for the comment
-    const mockUser = {
-      name: 'John Doe'
-    };
-
-    // Setup mock comment response
+    const mockUser = { name: 'John Doe' };
     const mockComment = {
       id: 'comment-456',
       body: 'This is a test comment',
@@ -84,14 +76,9 @@ describe('addComment', () => {
       title: 'Test Issue'
     };
 
-    mockClient.issues.mockResolvedValue({
-      nodes: [mockIssue]
-    });
+    mockClient.issue.mockResolvedValue(mockIssue);
 
-    const mockUser = {
-      name: 'Jane Smith'
-    };
-
+    const mockUser = { name: 'Jane Smith' };
     const markdownBody = `# Heading
 
 - List item 1
@@ -123,9 +110,7 @@ describe('addComment', () => {
   });
 
   it('should throw NotFoundError when issue does not exist', async () => {
-    mockClient.issues.mockResolvedValue({
-      nodes: []  // No issues found
-    });
+    mockClient.issue.mockRejectedValue(new Error('Entity not found'));
 
     await expect(addComment(mockClient as LinearClient, 'ENG-999', 'Test comment'))
       .rejects
@@ -141,11 +126,8 @@ describe('addComment', () => {
       title: 'Test Issue'
     };
 
-    mockClient.issues.mockResolvedValue({
-      nodes: [mockIssue]
-    });
+    mockClient.issue.mockResolvedValue(mockIssue);
 
-    // Comment with null user (e.g., system-generated)
     const mockComment = {
       id: 'comment-101',
       body: 'System generated comment',
@@ -170,9 +152,7 @@ describe('addComment', () => {
       title: 'Test Issue'
     };
 
-    mockClient.issues.mockResolvedValue({
-      nodes: [mockIssue]
-    });
+    mockClient.issue.mockResolvedValue(mockIssue);
 
     const mockComment = {
       id: 'comment-111',
@@ -199,9 +179,7 @@ describe('addComment', () => {
       title: 'Test Issue'
     };
 
-    mockClient.issues.mockResolvedValue({
-      nodes: [mockIssue]
-    });
+    mockClient.issue.mockResolvedValue(mockIssue);
 
     mockClient.createComment.mockResolvedValue({
       success: false,
@@ -220,9 +198,7 @@ describe('addComment', () => {
       title: 'Test Issue'
     };
 
-    mockClient.issues.mockResolvedValue({
-      nodes: [mockIssue]
-    });
+    mockClient.issue.mockResolvedValue(mockIssue);
 
     const multiLineBody = `First line
 Second line
@@ -248,20 +224,18 @@ Final line.`;
     expect(result.body.split('\n').length).toBe(5);
   });
 
-  it('should find correct issue when multiple issues have same number', async () => {
-    const mockIssues = [
-      { id: 'issue-111', identifier: 'ENG-42', title: 'ENG Issue' },
-      { id: 'issue-222', identifier: 'DES-42', title: 'DES Issue' },
-      { id: 'issue-333', identifier: 'ENG-42', title: 'Duplicate number ENG' }
-    ];
+  it('should use issue id from client.issue() for the comment', async () => {
+    const mockIssue = {
+      id: 'issue-222',
+      identifier: 'DES-42',
+      title: 'DES Issue'
+    };
 
-    mockClient.issues.mockResolvedValue({
-      nodes: mockIssues
-    });
+    mockClient.issue.mockResolvedValue(mockIssue);
 
     const mockComment = {
       id: 'comment-333',
-      body: 'Comment on ENG-42',
+      body: 'Comment on DES-42',
       createdAt: new Date('2024-01-15T10:00:00Z'),
       user: Promise.resolve({ name: 'Tester' })
     };
